@@ -41,6 +41,16 @@ namespace timeline_test
         private Point dragStartPosition;
         private double dragStartOffset = 0.0;
         
+        // Momentum/inertia state
+        private double momentumVelocity = 0.0; // Pixels per second
+        private System.Windows.Threading.DispatcherTimer momentumTimer;
+        private const double FRICTION = 0.95; // Friction coefficient (0.92 = 8% reduction per frame)
+        private const double MIN_VELOCITY = 10; // Stop when velocity is below this threshold
+        private const double MAX_VELOCITY_AGE = 0.1; // Maximum age of velocity sample in seconds (100ms)
+        private Point lastMousePosition;
+        private DateTime lastMouseMoveTime;
+        private List<(double velocity, DateTime time)> velocityHistory = new List<(double, DateTime)>();
+        
         // Drawing constants
         private const double TIMELINE_HEIGHT = 300.0;
         private const int YEAR_LABEL_INTERVAL = 5; // Label every 5 years
@@ -484,9 +494,15 @@ namespace timeline_test
         {
             if (e.LeftButton == MouseButtonState.Pressed)
             {
+                // Stop any existing momentum
+                StopMomentum();
+                
                 isDragging = true;
                 dragStartPosition = e.GetPosition(TimelineCanvas);
+                lastMousePosition = dragStartPosition;
+                lastMouseMoveTime = DateTime.Now;
                 dragStartOffset = currentOffset;
+                velocityHistory.Clear();
                 TimelineCanvas.CaptureMouse();
             }
         }
@@ -496,11 +512,32 @@ namespace timeline_test
             if (isDragging)
             {
                 Point currentPosition = e.GetPosition(TimelineCanvas);
+                DateTime currentTime = DateTime.Now;
+                
+                // Calculate delta from start position
                 double deltaX = currentPosition.X - dragStartPosition.X;
                 
                 // Reverse direction: dragging left moves forward in time, right moves backward
                 currentOffset = dragStartOffset - deltaX;
                 RedrawTimeline();
+                
+                // Calculate velocity for momentum (pixels per second)
+                double timeDelta = (currentTime - lastMouseMoveTime).TotalSeconds;
+                if (timeDelta > 0 && timeDelta < 0.5) // Only use recent samples (within 500ms)
+                {
+                    double positionDelta = currentPosition.X - lastMousePosition.X;
+                    // Reverse direction for timeline (left = positive velocity)
+                    double velocity = -positionDelta / timeDelta;
+                    
+                    // Store velocity sample with timestamp
+                    velocityHistory.Add((velocity, currentTime));
+                    
+                    // Remove old samples (older than MAX_VELOCITY_AGE)
+                    velocityHistory.RemoveAll(v => (currentTime - v.time).TotalSeconds > MAX_VELOCITY_AGE);
+                }
+                
+                lastMousePosition = currentPosition;
+                lastMouseMoveTime = currentTime;
             }
         }
         
@@ -511,9 +548,37 @@ namespace timeline_test
                 isDragging = false;
                 TimelineCanvas.ReleaseMouseCapture();
                 
-                // Snap to nearest tick
-                SnapToNearestTick();
-                RedrawTimeline();
+                // Calculate average velocity from recent samples (within MAX_VELOCITY_AGE)
+                DateTime now = DateTime.Now;
+                var recentVelocities = velocityHistory
+                    .Where(v => (now - v.time).TotalSeconds <= MAX_VELOCITY_AGE)
+                    .Select(v => v.velocity)
+                    .ToList();
+                
+                if (recentVelocities.Count > 0)
+                {
+                    // Use average of recent velocities, weighted towards more recent samples
+                    momentumVelocity = recentVelocities.Average();
+                }
+                else
+                {
+                    momentumVelocity = 0.0;
+                }
+                
+                // Start momentum if velocity is significant
+                if (Math.Abs(momentumVelocity) > MIN_VELOCITY)
+                {
+                    StartMomentum();
+                }
+                else
+                {
+                    // Snap to nearest tick if no momentum
+                    SnapToNearestTick();
+                    RedrawTimeline();
+                }
+                
+                // Clear velocity history
+                velocityHistory.Clear();
             }
         }
         
@@ -524,10 +589,92 @@ namespace timeline_test
                 isDragging = false;
                 TimelineCanvas.ReleaseMouseCapture();
                 
-                // Snap to nearest tick
+                // Calculate average velocity from recent samples (within MAX_VELOCITY_AGE)
+                DateTime now = DateTime.Now;
+                var recentVelocities = velocityHistory
+                    .Where(v => (now - v.time).TotalSeconds <= MAX_VELOCITY_AGE)
+                    .Select(v => v.velocity)
+                    .ToList();
+                
+                if (recentVelocities.Count > 0)
+                {
+                    // Use average of recent velocities
+                    momentumVelocity = recentVelocities.Average();
+                }
+                else
+                {
+                    momentumVelocity = 0.0;
+                }
+                
+                // Start momentum if velocity is significant
+                if (Math.Abs(momentumVelocity) > MIN_VELOCITY)
+                {
+                    StartMomentum();
+                }
+                else
+                {
+                    // Snap to nearest tick if no momentum
+                    SnapToNearestTick();
+                    RedrawTimeline();
+                }
+                
+                // Clear velocity history
+                velocityHistory.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Starts momentum scrolling based on the drag velocity
+        /// </summary>
+        private void StartMomentum()
+        {
+            // Use CompositionTarget.Rendering for smoother animation (runs at display refresh rate)
+            if (momentumTimer == null)
+            {
+                momentumTimer = new System.Windows.Threading.DispatcherTimer();
+                momentumTimer.Interval = TimeSpan.FromMilliseconds(8); // ~120 FPS for smoother animation
+                momentumTimer.Tick += MomentumTimer_Tick;
+            }
+            
+            momentumTimer.Start();
+        }
+
+        /// <summary>
+        /// Stops momentum scrolling
+        /// </summary>
+        private void StopMomentum()
+        {
+            if (momentumTimer != null)
+            {
+                momentumTimer.Stop();
+            }
+            momentumVelocity = 0.0;
+        }
+
+        /// <summary>
+        /// Timer tick handler for momentum scrolling - applies velocity with friction
+        /// </summary>
+        private void MomentumTimer_Tick(object sender, EventArgs e)
+        {
+            if (Math.Abs(momentumVelocity) < MIN_VELOCITY)
+            {
+                // Velocity is too low, stop momentum and snap to nearest tick
+                StopMomentum();
                 SnapToNearestTick();
                 RedrawTimeline();
+                return;
             }
+            
+            // Apply velocity (convert from pixels per second to pixels per frame)
+            // Timer runs at ~120 FPS (8ms intervals), so divide by 120
+            double frameDelta = momentumVelocity / 120.0;
+            // Add frameDelta to continue in the same direction as the drag
+            currentOffset += frameDelta;
+            
+            // Apply friction
+            momentumVelocity *= FRICTION;
+            
+            RedrawTimeline();
         }
 
         /// <summary>
