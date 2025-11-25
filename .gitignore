@@ -1,5 +1,10 @@
-/.vs
-/bin/
-/bin/*
-/timeline_test/bin/
-/timeline_test/bin/*
+# ignore Visual Studio folder
+.vs/
+
+# ignore build output
+bin/
+obj/
+
+# ignore nested project bin folders
+timeline_test/bin/
+timeline_test/obj/
