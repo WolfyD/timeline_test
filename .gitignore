@@ -1,5 +1,5 @@
 /.vs
-bin/
-bin/*
-timeline_test/bin/
-timeline_test/bin/*
+/bin/
+/bin/*
+/timeline_test/bin/
+/timeline_test/bin/*
