@@ -74,7 +74,9 @@
     <Compile Include="classes\CharacterItem.cs" />
     <Compile Include="classes\Event.cs" />
     <Compile Include="classes\IItem.cs" />
+    <Compile Include="classes\IItemFactory.cs" />
     <Compile Include="classes\ItemDate.cs" />
+    <Compile Include="classes\ItemFactory.cs" />
     <Compile Include="classes\ItemImage.cs" />
     <Compile Include="classes\Tag.cs" />
     <Compile Include="classes\Note.cs" />
@@ -128,4 +130,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.0" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
 </Project>

@@ -13,27 +13,30 @@ namespace timeline_test.classes
     public interface IItem
     {
         // Main section | generic data
-        string Id { get; }
-        ItemTypes ItemType { get; }
-        string Title { get; }
-        ItemDate StartDate { get; }
-        ItemDate EndDate { get; }
-        string Description { get; }
-        string Content { get; }
-        Tag[] Tags { get; }
-        ItemImage[] Images { get; }
-        string StoryId { get; }
+        string Id { get; set; }
+        ItemTypes ItemType { get; set; }
+        string Title { get; set; }
+        ItemDate StartDate { get; set; }
+        ItemDate EndDate { get; set; }
+        string Description { get; set; }
+        string Content { get; set; }
+        Tag[] Tags { get; set; }
+        ItemImage[] Images { get; set; }
+        string StoryId { get; set; }
 
         // Book reference section | citations
-        string BookTitle { get; }
-        string Chapter { get; }
-        string Page { get; }
-        Story[] StoryReferences { get; }
+        string BookTitle { get; set; }
+        string Chapter { get; set; }
+        string Page { get; set; }
+        Story[] StoryReferences { get; set; }
 
         // Display section | visuals
-        Color Color { get; }
-        bool ShowInNotes { get; }
-        int Importance { get; }
+        Color Color { get; set; }
+        bool ShowInNotes { get; set; }
+        int Importance { get; set; }
+
+        // In case timeline granularity changed
+        int CreationGranularity { get; set; }
     }
 
 

@@ -13,6 +13,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using timeline_test.classes;
 
 namespace timeline_test
 {
@@ -21,6 +22,7 @@ namespace timeline_test
     /// </summary>
     public partial class TimelineForm : Window
     {
+
         // Timeline configuration variables
         private double tickGap = 50.0; // Pixels between ticks
         private int startYear = 0; // Initial year to center
@@ -35,7 +37,8 @@ namespace timeline_test
         private DatabaseHelper databaseHelper;
         private Dictionary<string, object> timelineData;
         private Dictionary<string, object> settingsData;
-        
+        private Timeline timeLine;
+
         // Mouse drag state
         private bool isDragging = false;
         private Point dragStartPosition;
@@ -129,6 +132,8 @@ namespace timeline_test
                 currentYear = startYear;
                 RedrawTimeline();
             }), System.Windows.Threading.DispatcherPriority.Loaded);
+
+            this.timeLine = databaseHelper.GetCompleteTimeline(this.timelineId);
         }
 
         /// <summary>

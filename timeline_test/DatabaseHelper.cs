@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using timeline_test.Properties;
+using timeline_test.classes;
+using System.Drawing;
 
 namespace timeline_test
 {
@@ -13,6 +15,9 @@ namespace timeline_test
     /// </summary>
     public class DatabaseHelper : IDisposable
     {
+        //Intitialization related stuff
+        #region INIT
+
         private string databasePath;
         private SqliteConnection connection;
         private bool disposed = false;
@@ -782,6 +787,65 @@ namespace timeline_test
         }
 
         /// <summary>
+        /// TEMPORARY: Inspects the schema of a database file (for analyzing old database structure)
+        /// </summary>
+        public static void InspectDatabaseSchema(string dbPath)
+        {
+            string outputPath = Path.Combine(Path.GetDirectoryName(dbPath), "old_db_schema.txt");
+            using (var writer = new StreamWriter(outputPath))
+            using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+            {
+                connection.Open();
+
+                writer.WriteLine("=== TABLES ===");
+                var tablesQuery = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;";
+                using (var command = new SqliteCommand(tablesQuery, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        string tableName = reader.GetString(0);
+                        writer.WriteLine($"\nTable: {tableName}");
+
+                        // Get schema for this table
+                        using (var schemaCmd = new SqliteCommand($"PRAGMA table_info({tableName});", connection))
+                        using (var schemaReader = schemaCmd.ExecuteReader())
+                        {
+                            writer.WriteLine("  Columns:");
+                            while (schemaReader.Read())
+                            {
+                                string colName = schemaReader.GetString(1);
+                                string colType = schemaReader.GetString(2);
+                                int notNull = schemaReader.GetInt32(3);
+                                string defaultValue = schemaReader.IsDBNull(4) ? "NULL" : schemaReader.GetString(4);
+                                int pk = schemaReader.GetInt32(5);
+                                writer.WriteLine($"    {colName} ({colType}) {(notNull == 1 ? "NOT NULL" : "")} {(pk > 0 ? "PRIMARY KEY" : "")} DEFAULT: {defaultValue}");
+                            }
+                        }
+                    }
+                }
+
+                writer.WriteLine("\n\n=== INDEXES ===");
+                var indexesQuery = "SELECT name, tbl_name, sql FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' ORDER BY name;";
+                using (var command = new SqliteCommand(indexesQuery, connection))
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        writer.WriteLine($"{reader.GetString(0)} on {reader.GetString(1)}");
+                    }
+                }
+            }
+        }
+
+
+        #endregion
+
+
+
+
+
+        /// <summary>
         /// Gets all timelines from the database
         /// </summary>
         /// <returns>List of dictionaries containing timeline data (id, title, author, description, start_year, granularity, picture)</returns>
@@ -861,55 +925,139 @@ namespace timeline_test
         }
 
         /// <summary>
-        /// TEMPORARY: Inspects the schema of a database file (for analyzing old database structure)
+        /// Gets settings for a specific timeline
         /// </summary>
-        public static void InspectDatabaseSchema(string dbPath)
+        /// <param name="timelineId">The timeline ID</param>
+        /// <returns>Timeline settings object</returns>
+        public TimelineSettings GetTimelineSettingsObject(long timelineId)
         {
-            string outputPath = Path.Combine(Path.GetDirectoryName(dbPath), "old_db_schema.txt");
-            using (var writer = new StreamWriter(outputPath))
-            using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+            var settings_dict = GetTimelineSettings(timelineId);
+            TimelineSettings settings = new()
             {
-                connection.Open();
-                
-                writer.WriteLine("=== TABLES ===");
-                var tablesQuery = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;";
-                using (var command = new SqliteCommand(tablesQuery, connection))
+                Id                  = (long)settings_dict["id"],
+                TimelineId          = (long)settings_dict["timeline_id"],
+                FontFamily          = (string)settings_dict["font"],
+                FontSizeScale       = (double)settings_dict["font_size_scale"],
+                PixelsPerSubtick    = (int)settings_dict["pixels_per_subtick"],
+                CustomCSS           = (string)settings_dict["custom_css"],
+                UseCustomCSS        = ((int)settings_dict["use_custom_css"]) == 1,
+                IsFullScreen        = ((int)settings_dict["is_fullscreen"]) == 1,
+                ShowGuides          = ((int)settings_dict["show_guides"]) == 1,
+                WindowSizeX         = (int)settings_dict["window_size_x"],
+                WindowSizeY         = (int)settings_dict["window_size_y"],
+                WindowPositionX     = (int)settings_dict["window_position_x"],
+                WindowPositionY     = (int)settings_dict["window_position_y"],
+                UseCustomScaling    = ((int)settings_dict["use_custom_scaling"]) == 1,
+                CustomScale         = (double)settings_dict["custom_scale"],
+                DisplayRadius       = (int)settings_dict["display_radius"],
+                CanvasSettings      = (string)settings_dict["canvas_settings"],
+                UpdatedAt           = (string)settings_dict["updated_at"]
+            };
+
+            return settings;
+        }
+
+        /// <summary>
+        /// Generates a dictionary at runtime from the types of items stored in the database
+        /// </summary>
+        /// <returns>A Dictionary of item_id and type name</returns>
+        public Dictionary<int, string> GetItemTypes()
+        {
+            var itemTypes = new Dictionary<int, string>();
+            string sql = "SELECT id, name FROM item_types;";
+            using (var command = new SqliteCommand(sql, connection))
+            {
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        string tableName = reader.GetString(0);
-                        writer.WriteLine($"\nTable: {tableName}");
-                        
-                        // Get schema for this table
-                        using (var schemaCmd = new SqliteCommand($"PRAGMA table_info({tableName});", connection))
-                        using (var schemaReader = schemaCmd.ExecuteReader())
-                        {
-                            writer.WriteLine("  Columns:");
-                            while (schemaReader.Read())
-                            {
-                                string colName = schemaReader.GetString(1);
-                                string colType = schemaReader.GetString(2);
-                                int notNull = schemaReader.GetInt32(3);
-                                string defaultValue = schemaReader.IsDBNull(4) ? "NULL" : schemaReader.GetString(4);
-                                int pk = schemaReader.GetInt32(5);
-                                writer.WriteLine($"    {colName} ({colType}) {(notNull == 1 ? "NOT NULL" : "")} {(pk > 0 ? "PRIMARY KEY" : "")} DEFAULT: {defaultValue}");
-                            }
-                        }
-                    }
-                }
-                
-                writer.WriteLine("\n\n=== INDEXES ===");
-                var indexesQuery = "SELECT name, tbl_name, sql FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%' ORDER BY name;";
-                using (var command = new SqliteCommand(indexesQuery, connection))
-                using (var reader = command.ExecuteReader())
-                {
-                    while (reader.Read())
-                    {
-                        writer.WriteLine($"{reader.GetString(0)} on {reader.GetString(1)}");
+                        int id = reader.GetInt32(0);
+                        string name = reader.GetString(1);
+                        itemTypes[id] = name;
                     }
                 }
             }
+            return itemTypes;
+        }
+
+        /// <summary>
+        /// Returns a list of Item interface objects for a given timeline
+        /// </summary>
+        /// <param name="timelineId"></param>
+        /// <returns></returns>
+        private List<IItem> GetItemsForTimeline(long timelineId)
+        {
+            IItemFactory factory = new ItemFactory();
+            var types = GetItemTypes();
+            var items = new List<IItem>();
+            string sql = "SELECT * FROM items WHERE timeline_id = @timelineId ORDER BY year, subtick;";
+            using (var command = new SqliteCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@timelineId", timelineId);
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        int typeId = reader.GetInt32(reader.GetOrdinal("type_id"));
+                        IItem item = factory.Create(types[typeId]);
+
+                        item.Id = reader.GetString(reader.GetOrdinal("id"));
+                        item.Title = reader.GetString(reader.GetOrdinal("title"));
+                        item.Description = reader.GetString(reader.GetOrdinal("description"));
+                        item.Content = reader.GetString(reader.GetOrdinal("content"));
+                        var sid = reader.GetOrdinal("story_id");
+                        if (!reader.IsDBNull(sid))
+                        {
+                            item.StoryId = reader.GetString(sid);
+                        }
+
+                        item.StartDate = new ItemDate(reader.GetInt32(reader.GetOrdinal("year")), reader.GetInt32(reader.GetOrdinal("subtick")), reader.GetInt32(reader.GetOrdinal("original_subtick")));
+                        item.EndDate = new ItemDate(reader.GetInt32(reader.GetOrdinal("end_year")), reader.GetInt32(reader.GetOrdinal("end_subtick")), reader.GetInt32(reader.GetOrdinal("original_end_subtick")));
+
+                        var bt = reader.GetOrdinal("book_title");
+                        if (!reader.IsDBNull(bt))
+                        {
+                            item.BookTitle = reader.GetString(bt);
+                        }
+                        item.Chapter = reader.GetString(reader.GetOrdinal("chapter"));
+                        item.Page = reader.GetString(reader.GetOrdinal("page"));
+
+
+                        var col = reader.GetOrdinal("color");
+                        if (!reader.IsDBNull(col))
+                        {
+                            string color = reader.GetString(col);
+                            if (color != null && color != "" && color.Length == 7 && color.StartsWith("#"))
+                            {
+                                try
+                                {
+                                    item.Color = ColorTranslator.FromHtml(color);
+                                }
+                                catch (Exception ex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine("Exception while parsing color: " + ex.Message);
+                                    item.Color = Color.Black;
+                                }
+                            }
+                        }
+
+                        item.CreationGranularity = reader.GetInt32(reader.GetOrdinal("creation_granularity"));
+                        item.ShowInNotes = reader.GetBoolean(reader.GetOrdinal("show_in_notes"));
+                        item.Importance = reader.GetInt32(reader.GetOrdinal("importance"));
+
+                        items.Add(item);
+                    }
+                }
+            }
+
+            return items;
+        }
+
+        public Timeline GetCompleteTimeline(long timelineId)
+        {
+            List<IItem> items = GetItemsForTimeline(timelineId);
+            TimelineSettings settings = GetTimelineSettingsObject(timelineId);
+            return new(items, settings);
         }
     }
 }

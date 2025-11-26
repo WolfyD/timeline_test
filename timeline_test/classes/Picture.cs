@@ -11,7 +11,7 @@ namespace timeline_test.classes
     {
         public string Id { get; set; }
 
-        public ItemTypes ItemType => ItemTypes.Picture;
+        public ItemTypes ItemType {  get; set; }
 
         public string Title { get; set; }
 
@@ -42,5 +42,12 @@ namespace timeline_test.classes
         public bool ShowInNotes { get; set; }
 
         public int Importance { get; set; }
+
+        public int CreationGranularity { get; set; }
+
+        public Picture()
+        {
+            ItemType = ItemTypes.Picture;
+        }
     }
 }

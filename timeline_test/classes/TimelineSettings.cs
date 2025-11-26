@@ -8,23 +8,24 @@ namespace timeline_test.classes
 {
     public class TimelineSettings
     {
-        //TODO: Setting stuff comes here
-        // The following fields are examples only, and may change
-        public int StartingYear { get; set; }
+        public long Id { get; set; }
+        public long TimelineId { get; set; }
         public string FontFamily { get; set; }
-        public int FontSize { get; set; }
-        public int SubyearValuesBetweenYears { get; set; }
-        public bool DisplayDarkMode { get; set; }
-        public Dictionary<int, string> ImportantDates { get; set; }
-        /*
-         Example:
-        [
-            {"1900": "the king is born"},
-            {"1918": "the war ends"},
-            {"1939": "the new war starts"},
-            {"1945": "the new war ends"}    
-        ]
-         */
+        public double FontSizeScale { get; set; }
+        public int PixelsPerSubtick { get; set; }
+        public string CustomCSS { get; set; }
+        public bool UseCustomCSS { get; set; }
+        public bool IsFullScreen { get; set; }
+        public bool ShowGuides { get; set; }
+        public int WindowSizeX { get; set; }
+        public int WindowSizeY { get; set; }
+        public int WindowPositionX { get; set; }
+        public int WindowPositionY { get; set; }
+        public bool UseCustomScaling { get; set; }
+        public double CustomScale { get; set; }
+        public int DisplayRadius {  get; set; }
+        public string CanvasSettings { get; set; }
+        public string UpdatedAt { get; set; }
 
         /// <summary>
         /// Returns default timeline settings

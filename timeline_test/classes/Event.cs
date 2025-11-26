@@ -11,13 +11,13 @@ namespace timeline_test.classes
     {
         public string Id { get; set; }
 
-        public ItemTypes ItemType => ItemTypes.Event;
+        public ItemTypes ItemType { get; set; }
 
         public string Title { get; set; }
 
         public ItemDate StartDate { get; set; }
 
-        public ItemDate EndDate => StartDate;
+        public ItemDate EndDate {  get; set; }
 
         public string Description { get; set; }
 
@@ -42,5 +42,13 @@ namespace timeline_test.classes
         public bool ShowInNotes { get; set; }
 
         public int Importance { get; set; }
+
+        public int CreationGranularity { get; set; }
+
+        public Event()
+        {
+            ItemType = ItemTypes.Event;
+            EndDate = StartDate;
+        }
     }
 }
