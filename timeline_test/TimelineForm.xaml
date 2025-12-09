@@ -3,12 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:timeline_test"
+        xmlns:local="clr-namespace:timeline_test" xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
         mc:Ignorable="d"
         Title="Timeline Form" Height="1003" Width="1250"
         Background="#E6F3FF"
         x:Name="TimelineFormWindow">
-    <Grid LayoutTransform="{StaticResource GlobalWindowScaleTransform}" x:Name="MainGrid">
+    <Grid  x:Name="MainGrid">
         <Grid.RowDefinitions>
             <!-- Row 0: Menu bar (fixed at top) -->
             <RowDefinition Height="Auto" x:Name="MenuRow"/>
@@ -22,12 +22,110 @@
 
         <!-- Row 0: Menu bar -->
         <Border Grid.Row="0" Background="#F5F5F5" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1">
-            <TextBlock Text="Menu" Padding="10,5" VerticalAlignment="Center"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Hamburger menu button on the right -->
+                <Button Grid.Column="1" 
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="16"
+                        Height="16"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        x:Name="HamburgerMenuButton"
+                        Click="HamburgerMenuButton_Click">
+                    <Button.Content>
+                        <iconPacks:BootstrapIcons Kind="List" Width="12" Height="12" />
+                    </Button.Content>
+                </Button>
+                
+                <!-- Hamburger menu popup -->
+                <Popup x:Name="HamburgerMenuPopup"
+                       PlacementTarget="{Binding ElementName=HamburgerMenuButton}"
+                       Placement="Bottom"
+                       StaysOpen="False">
+                    <Border Background="White" 
+                            BorderBrush="#CCCCCC" 
+                            BorderThickness="1"
+                            CornerRadius="2"
+                            Padding="0">
+                        <Menu >
+                            <!-- File -->
+                            <MenuItem Header="_File">
+                                <MenuItem Header="_New Timeline"/>
+                                <MenuItem Header="_Import"/>
+                                <MenuItem Header="E_xport"/>
+                                <Separator/>
+                                <MenuItem Header="_Refresh"/>
+                                <Separator/>
+                                <MenuItem Header="E_xit"/>
+                            </MenuItem>
+                            
+                            <!-- Edit -->
+                            <MenuItem Header="_Edit">
+                                <MenuItem Header="_Add Item"/>
+                                <Separator/>
+                                <MenuItem Header="Add _Character"/>
+                                <MenuItem Header="_Manage Characters"/>
+                                <Separator/>
+                                <MenuItem Header="_Settings"/>
+                            </MenuItem>
+                            
+                            <!-- Export -->
+                            <MenuItem Header="E_xport">
+                                <MenuItem Header="_PDF"/>
+                                <MenuItem Header="_CSV"/>
+                                <MenuItem Header="_HTML"/>
+                                <MenuItem Header="_Image"/>
+                            </MenuItem>
+                            
+                            <!-- View -->
+                            <MenuItem Header="_View">
+                                <MenuItem Header="Dark _Mode" IsCheckable="True"/>
+                                <MenuItem Header="_Guides" IsCheckable="True"/>
+                                <Separator/>
+                                <MenuItem Header="_Archive"/>
+                            </MenuItem>
+
+                            <Separator />
+
+                            <!-- Help -->
+                            <MenuItem Header="(?)">
+                                <MenuItem Header="_About"/>
+                                <MenuItem Header="_Documentation"/>
+                                <MenuItem Header="Bug _Report"/>
+                            </MenuItem>
+                        </Menu>
+                    </Border>
+                </Popup>
+            </Grid>
         </Border>
 
         <!-- Row 1: Header -->
         <Border Grid.Row="1" Background="#E0E0E0" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1">
-            <TextBlock Text="Header" Padding="10,8" VerticalAlignment="Center" FontWeight="SemiBold"/>
+            <!-- Timeline title -->
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" Name="MainRow1" />
+                    <RowDefinition Height="*" Name="MainRow2" />
+                    <RowDefinition Height="*" Name="AdditionalRow" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" Name="LeftColumn" />
+                    <ColumnDefinition Width="*" Name="RightColumn" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Row="0" Text="v0.0.2" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Left" FontWeight="SemiBold" FontSize="8"/>
+                <TextBlock Grid.Row="1" Text="Entities loaded" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Left" FontWeight="SemiBold" FontSize="8"/>
+                <TextBlock Grid.Row="2" Text="Entities displayed" Padding="0" VerticalAlignment="Top" HorizontalAlignment="Left" FontWeight="SemiBold" FontSize="8"/>
+                <TextBlock x:Name="TitleTextBlock" Grid.Row="0" Grid.ColumnSpan="2" Grid.RowSpan="3" Text="Title" Padding="10,0,10,4" VerticalAlignment="Top" HorizontalAlignment="Center" FontSize="20" FontWeight="Bold"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="By ~" Padding="0,2,0,4"  VerticalAlignment="Center" HorizontalAlignment="Right" FontWeight="Light" FontSize="8" />
+                <TextBlock x:Name="AuthorTextBlock" Grid.Row="2" Grid.Column="1" Text="Author" Padding="0,2,0,4"  VerticalAlignment="Bottom" HorizontalAlignment="Left" FontWeight="Light" FontSize="8" />
+            </Grid>
         </Border>
 
         <!-- Row 2: Middle section Grid (nested) -->
@@ -107,7 +205,7 @@
                     MouseDown="TimelineCanvas_MouseDown"
                     MouseMove="TimelineCanvas_MouseMove"
                     MouseUp="TimelineCanvas_MouseUp"
-                    MouseLeave="TimelineCanvas_MouseLeave"/>
+                    MouseLeave="TimelineCanvas_MouseLeave" MouseWheel="TimelineCanvas_MouseWheel"/>
 
             <!-- Custom splitter between MIDDLE and BOTTOM -->
             <Thumb Grid.Row="1"

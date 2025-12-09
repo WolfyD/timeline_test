@@ -78,6 +78,7 @@
     <Compile Include="classes\ItemDate.cs" />
     <Compile Include="classes\ItemFactory.cs" />
     <Compile Include="classes\ItemImage.cs" />
+    <Compile Include="classes\ItemRenderer.cs" />
     <Compile Include="classes\Tag.cs" />
     <Compile Include="classes\Note.cs" />
     <Compile Include="classes\Period.cs" />
@@ -86,6 +87,7 @@
     <Compile Include="classes\Story.cs" />
     <Compile Include="classes\Timeline.cs" />
     <Compile Include="classes\TimelineBase.cs" />
+    <Compile Include="classes\TimelineRenderer.cs" />
     <Compile Include="classes\TimelineSettings.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>

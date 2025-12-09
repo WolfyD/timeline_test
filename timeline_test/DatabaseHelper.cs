@@ -1044,6 +1044,7 @@ namespace timeline_test
                         item.CreationGranularity = reader.GetInt32(reader.GetOrdinal("creation_granularity"));
                         item.ShowInNotes = reader.GetBoolean(reader.GetOrdinal("show_in_notes"));
                         item.Importance = reader.GetInt32(reader.GetOrdinal("importance"));
+                        item.ItemIndex = reader.GetInt32(reader.GetOrdinal("item_index"));
 
                         items.Add(item);
                     }

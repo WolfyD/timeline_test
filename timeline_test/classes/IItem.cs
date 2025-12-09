@@ -34,6 +34,7 @@ namespace timeline_test.classes
         Color Color { get; set; }
         bool ShowInNotes { get; set; }
         int Importance { get; set; }
+        int ItemIndex { get; set; }
 
         // In case timeline granularity changed
         int CreationGranularity { get; set; }

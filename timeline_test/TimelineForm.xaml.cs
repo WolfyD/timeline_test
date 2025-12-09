@@ -23,6 +23,8 @@ namespace timeline_test
     public partial class TimelineForm : Window
     {
 
+        public TimelineRenderer Renderer;
+
         // Timeline configuration variables
         private double tickGap = 50.0; // Pixels between ticks
         private int startYear = 0; // Initial year to center
@@ -45,6 +47,7 @@ namespace timeline_test
         private double dragStartOffset = 0.0;
         
         // Momentum/inertia state
+        private bool useDragMomentum = false; // Enable/disable drag momentum
         private double momentumVelocity = 0.0; // Pixels per second
         private System.Windows.Threading.DispatcherTimer momentumTimer;
         private const double FRICTION = 0.95; // Friction coefficient (0.92 = 8% reduction per frame)
@@ -82,6 +85,7 @@ namespace timeline_test
             }
             
             InitializeComponent();
+            // Renderer will be created after LoadTimelineData() in TimelineForm_Loaded
             this.Loaded += TimelineForm_Loaded;
             this.SizeChanged += TimelineForm_SizeChanged;
             this.Closed += TimelineForm_Closed;
@@ -120,6 +124,12 @@ namespace timeline_test
         {
             LoadTimelineData();
             ApplySizeConstraints();
+
+            this.timeLine = databaseHelper.GetCompleteTimeline(this.timelineId);
+
+            // Create renderer after timeline data is loaded (so it has correct startYear, tickGap, etc.)
+            Renderer = new TimelineRenderer(TimelineCanvas, centerX, centerY, CENTER_LINE_HEIGHT, CURRENT_YEAR_LINE_WIDTH, TIMELINE_HEIGHT, YEAR_LABEL_INTERVAL, YEAR_TICK_HEIGHT,
+                SUB_TICK_HEIGHT, yearSubdivision, startYear, tickGap, currentOffset, this.timeLine);
             
             // Subscribe to TimelineCanvas size changes to re-render when resized
             TimelineCanvas.SizeChanged += TimelineCanvas_SizeChanged;
@@ -129,11 +139,23 @@ namespace timeline_test
             {
                 centerX = TimelineCanvas.ActualWidth / 2.0;
                 centerY = TimelineCanvas.ActualHeight / 2.0;
+                
+                // Ensure renderer has the latest values
+                Renderer.UpdateCenters(centerX, centerY);
+                Renderer.UpdateStartYear(startYear);
+                Renderer.UpdateTickGap(tickGap);
+                Renderer.UpdateYearSubdivision(yearSubdivision);
+                
+                // Calculate initial offset so that startYear appears at the center
+                // If we want startYear at centerX, then: startYear = GetYearFromPixel(centerX)
+                // startYear = startYear + ((centerX - centerX + currentOffset) / tickGap)
+                // startYear = startYear + (currentOffset / tickGap)
+                // So currentOffset should be 0 to show startYear at center
+                currentOffset = 0.0;
                 currentYear = startYear;
-                RedrawTimeline();
+                
+                Renderer.RedrawTimeline(currentOffset);
             }), System.Windows.Threading.DispatcherPriority.Loaded);
-
-            this.timeLine = databaseHelper.GetCompleteTimeline(this.timelineId);
         }
 
         /// <summary>
@@ -143,7 +165,8 @@ namespace timeline_test
         {
             centerX = TimelineCanvas.ActualWidth / 2.0;
             centerY = TimelineCanvas.ActualHeight / 2.0;
-            RedrawTimeline();
+            Renderer.UpdateCenters(centerX, centerY);
+            Renderer.RedrawTimeline(currentOffset);
         }
 
         /// <summary>
@@ -192,10 +215,20 @@ namespace timeline_test
                         int granularity = (int)timelineData["granularity"];
                         yearSubdivision = granularity - 1; // Convert granularity to subdivision count
                         
-                        // Set window title
+                        // Set window title and header labels
                         string title = (string)timelineData["title"];
                         string author = (string)timelineData["author"];
                         this.Title = $"{title} by {author}";
+                        
+                        // Update header TextBlocks with loaded data
+                        if (TitleTextBlock != null)
+                        {
+                            TitleTextBlock.Text = title;
+                        }
+                        if (AuthorTextBlock != null)
+                        {
+                            AuthorTextBlock.Text = author;
+                        }
                         
                         // Load settings for this timeline
                         settingsData = databaseHelper.GetTimelineSettings(timelineId);
@@ -272,228 +305,49 @@ namespace timeline_test
         }
         
         /// <summary>
-        /// Converts a pixel X coordinate to a year value
-        /// </summary>
-        private double GetYearFromPixel(double pixelX)
-        {
-            double pixelOffsetFromCenter = pixelX - centerX;
-            double totalPixelsFromStart = pixelOffsetFromCenter + currentOffset;
-            double year = startYear + (totalPixelsFromStart / tickGap);
-            return year;
-        }
-        
-        /// <summary>
-        /// Converts a year value to a pixel X coordinate
-        /// </summary>
-        private double GetPixelFromYear(double year)
-        {
-            double yearOffset = year - startYear;
-            double pixelOffset = yearOffset * tickGap;
-            double pixelX = centerX - currentOffset + pixelOffset;
-            return pixelX;
-        }
-        
-        /// <summary>
-        /// Gets the visible year range based on current viewport
-        /// </summary>
-        private void GetVisibleYearRange(out double minYear, out double maxYear)
-        {
-            double leftPixel = 0;
-            double rightPixel = TimelineCanvas.ActualWidth;
-            
-            minYear = GetYearFromPixel(leftPixel);
-            maxYear = GetYearFromPixel(rightPixel);
-            
-            // Add padding to ensure we draw slightly outside viewport
-            double padding = 2.0;
-            minYear -= padding;
-            maxYear += padding;
-        }
-        
-        /// <summary>
         /// Snaps the current offset to the nearest tick
         /// </summary>
         private void SnapToNearestTick()
         {
-            double currentYearAtCenter = GetYearFromPixel(centerX);
+            // Ensure renderer has the latest values
+            Renderer.UpdateCenters(centerX, centerY);
+            Renderer.UpdateStartYear(startYear);
+            Renderer.UpdateTickGap(tickGap);
+            Renderer.UpdateYearSubdivision(yearSubdivision);
             
+            // Get the current year at the center using the renderer
+            double currentYearAtCenter = Renderer.GetYearFromPixel(centerX);
+            
+            int snappedYear;
             if (yearSubdivision > 0)
             {
                 // Snap to nearest sub-tick
                 double tickInterval = 1.0 / (yearSubdivision + 1);
-                double snappedYear = Math.Round(currentYearAtCenter / tickInterval) * tickInterval;
-                // Calculate offset so that snappedYear appears at centerX
-                double yearOffset = snappedYear - startYear;
-                currentOffset = yearOffset * tickGap;
+                double snappedYearDouble = Math.Round(currentYearAtCenter / tickInterval) * tickInterval;
+                snappedYear = (int)Math.Round(snappedYearDouble);
             }
             else
             {
                 // Snap to nearest year
-                int snappedYear = (int)Math.Round(currentYearAtCenter);
-                // Calculate offset so that snappedYear appears at centerX
-                double yearOffset = snappedYear - startYear;
-                currentOffset = yearOffset * tickGap;
+                snappedYear = (int)Math.Round(currentYearAtCenter);
             }
             
-            currentYear = (int)Math.Round(GetYearFromPixel(centerX));
+            // Calculate offset so that snappedYear appears at centerX
+            // Formula: year = StartYear + ((pixelX - CenterX + CurrentOffset) / TickGap)
+            // At centerX: snappedYear = StartYear + ((centerX - CenterX + currentOffset) / TickGap)
+            // snappedYear = StartYear + (currentOffset / TickGap)
+            // currentOffset = (snappedYear - StartYear) * TickGap
+            double yearOffset = snappedYear - startYear;
+            currentOffset = yearOffset * tickGap;
+            
+            // Update the renderer with the new offset
+            Renderer.UpdateCurrentOffset(currentOffset);
+            
+            // The current year is the snapped year
+            currentYear = snappedYear;
         }
         
-        /// <summary>
-        /// Draws the horizontal center line
-        /// </summary>
-        private void DrawCenterLine()
-        {
-            Line centerLine = new Line
-            {
-                X1 = 0,
-                Y1 = centerY,
-                X2 = TimelineCanvas.ActualWidth,
-                Y2 = centerY,
-                Stroke = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                StrokeThickness = CENTER_LINE_HEIGHT
-            };
-            TimelineCanvas.Children.Add(centerLine);
-        }
         
-        /// <summary>
-        /// Draws the vertical line at the current year (center)
-        /// </summary>
-        private void DrawCurrentYearLine()
-        {
-            double timelineHeight = TimelineCanvas.ActualHeight > 0 ? TimelineCanvas.ActualHeight : TIMELINE_HEIGHT;
-            Line currentYearLine = new Line
-            {
-                X1 = centerX,
-                Y1 = 0,
-                X2 = centerX,
-                Y2 = timelineHeight,
-                Stroke = new SolidColorBrush(Color.FromRgb(100, 150, 200)),
-                StrokeThickness = CURRENT_YEAR_LINE_WIDTH
-            };
-            TimelineCanvas.Children.Add(currentYearLine);
-        }
-        
-        /// <summary>
-        /// Draws year ticks (vertical marks for each year)
-        /// </summary>
-        private void DrawYearTicks()
-        {
-            GetVisibleYearRange(out double minYear, out double maxYear);
-            
-            int startYearInt = (int)Math.Floor(minYear);
-            int endYearInt = (int)Math.Ceiling(maxYear);
-            
-            for (int year = startYearInt; year <= endYearInt; year++)
-            {
-                double pixelX = GetPixelFromYear(year);
-                
-                if (pixelX >= -10 && pixelX <= TimelineCanvas.ActualWidth + 10)
-                {
-                    Line tick = new Line
-                    {
-                        X1 = pixelX,
-                        Y1 = centerY - (YEAR_TICK_HEIGHT / 2),
-                        X2 = pixelX,
-                        Y2 = centerY + (YEAR_TICK_HEIGHT / 2),
-                        Stroke = new SolidColorBrush(Color.FromRgb(150, 150, 150)),
-                        StrokeThickness = 1.0
-                    };
-                    TimelineCanvas.Children.Add(tick);
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Draws sub-ticks if yearSubdivision > 0
-        /// </summary>
-        private void DrawSubTicks()
-        {
-            if (yearSubdivision <= 0) return;
-            
-            GetVisibleYearRange(out double minYear, out double maxYear);
-            
-            int startYearInt = (int)Math.Floor(minYear);
-            int endYearInt = (int)Math.Ceiling(maxYear);
-            
-            for (int year = startYearInt; year <= endYearInt; year++)
-            {
-                for (int sub = 1; sub <= yearSubdivision; sub++)
-                {
-                    double subYear = year + (sub / (double)(yearSubdivision + 1));
-                    double pixelX = GetPixelFromYear(subYear);
-                    
-                    if (pixelX >= -10 && pixelX <= TimelineCanvas.ActualWidth + 10)
-                    {
-                        Line subTick = new Line
-                        {
-                            X1 = pixelX,
-                            Y1 = centerY - (SUB_TICK_HEIGHT / 2),
-                            X2 = pixelX,
-                            Y2 = centerY + (SUB_TICK_HEIGHT / 2),
-                            Stroke = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
-                            StrokeThickness = 0.5
-                        };
-                        TimelineCanvas.Children.Add(subTick);
-                    }
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Draws year labels every 5 years
-        /// </summary>
-        private void DrawYearLabels()
-        {
-            GetVisibleYearRange(out double minYear, out double maxYear);
-            
-            int startYearInt = (int)Math.Floor(minYear);
-            int endYearInt = (int)Math.Ceiling(maxYear);
-            
-            // Round to nearest multiple of YEAR_LABEL_INTERVAL
-            int labelStart = (startYearInt / YEAR_LABEL_INTERVAL) * YEAR_LABEL_INTERVAL;
-            if (labelStart > startYearInt) labelStart -= YEAR_LABEL_INTERVAL;
-            
-            for (int year = labelStart; year <= endYearInt; year += YEAR_LABEL_INTERVAL)
-            {
-                double pixelX = GetPixelFromYear(year);
-                
-                if (pixelX >= -50 && pixelX <= TimelineCanvas.ActualWidth + 50)
-                {
-                    TextBlock label = new TextBlock
-                    {
-                        Text = year.ToString(),
-                        FontSize = 12,
-                        Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 100))
-                    };
-                    
-                    Canvas.SetLeft(label, pixelX - (label.ActualWidth / 2));
-                    Canvas.SetTop(label, centerY + (YEAR_TICK_HEIGHT / 2) + 5);
-                    
-                    // Measure text to center it properly
-                    label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                    label.Arrange(new Rect(label.DesiredSize));
-                    
-                    Canvas.SetLeft(label, pixelX - (label.DesiredSize.Width / 2));
-                    
-                    TimelineCanvas.Children.Add(label);
-                }
-            }
-        }
-        
-        /// <summary>
-        /// Main drawing function - redraws all timeline elements
-        /// </summary>
-        private void RedrawTimeline()
-        {
-            TimelineCanvas.Children.Clear();
-            
-            // Draw in order: baseline graphics first, then other items on top
-            DrawCenterLine();
-            DrawSubTicks();
-            DrawYearTicks();
-            DrawYearLabels();
-            DrawCurrentYearLine();
-        }
         
         private void TimelineCanvas_MouseDown(object sender, MouseButtonEventArgs e)
         {
@@ -524,21 +378,27 @@ namespace timeline_test
                 
                 // Reverse direction: dragging left moves forward in time, right moves backward
                 currentOffset = dragStartOffset - deltaX;
-                RedrawTimeline();
                 
-                // Calculate velocity for momentum (pixels per second)
-                double timeDelta = (currentTime - lastMouseMoveTime).TotalSeconds;
-                if (timeDelta > 0 && timeDelta < 0.5) // Only use recent samples (within 500ms)
+                // Ensure renderer has the latest center values before redrawing
+                Renderer.UpdateCenters(centerX, centerY);
+                Renderer.RedrawTimeline(currentOffset);
+                
+                // Calculate velocity for momentum (only if momentum is enabled)
+                if (useDragMomentum)
                 {
-                    double positionDelta = currentPosition.X - lastMousePosition.X;
-                    // Reverse direction for timeline (left = positive velocity)
-                    double velocity = -positionDelta / timeDelta;
-                    
-                    // Store velocity sample with timestamp
-                    velocityHistory.Add((velocity, currentTime));
-                    
-                    // Remove old samples (older than MAX_VELOCITY_AGE)
-                    velocityHistory.RemoveAll(v => (currentTime - v.time).TotalSeconds > MAX_VELOCITY_AGE);
+                    double timeDelta = (currentTime - lastMouseMoveTime).TotalSeconds;
+                    if (timeDelta > 0 && timeDelta < 0.5) // Only use recent samples (within 500ms)
+                    {
+                        double positionDelta = currentPosition.X - lastMousePosition.X;
+                        // Reverse direction for timeline (left = positive velocity)
+                        double velocity = -positionDelta / timeDelta;
+                        
+                        // Store velocity sample with timestamp
+                        velocityHistory.Add((velocity, currentTime));
+                        
+                        // Remove old samples (older than MAX_VELOCITY_AGE)
+                        velocityHistory.RemoveAll(v => (currentTime - v.time).TotalSeconds > MAX_VELOCITY_AGE);
+                    }
                 }
                 
                 lastMousePosition = currentPosition;
@@ -553,37 +413,47 @@ namespace timeline_test
                 isDragging = false;
                 TimelineCanvas.ReleaseMouseCapture();
                 
-                // Calculate average velocity from recent samples (within MAX_VELOCITY_AGE)
-                DateTime now = DateTime.Now;
-                var recentVelocities = velocityHistory
-                    .Where(v => (now - v.time).TotalSeconds <= MAX_VELOCITY_AGE)
-                    .Select(v => v.velocity)
-                    .ToList();
-                
-                if (recentVelocities.Count > 0)
+                if (useDragMomentum)
                 {
-                    // Use average of recent velocities, weighted towards more recent samples
-                    momentumVelocity = recentVelocities.Average();
+                    // Calculate average velocity from recent samples (within MAX_VELOCITY_AGE)
+                    DateTime now = DateTime.Now;
+                    var recentVelocities = velocityHistory
+                        .Where(v => (now - v.time).TotalSeconds <= MAX_VELOCITY_AGE)
+                        .Select(v => v.velocity)
+                        .ToList();
+                    
+                    if (recentVelocities.Count > 0)
+                    {
+                        // Use average of recent velocities, weighted towards more recent samples
+                        momentumVelocity = recentVelocities.Average();
+                    }
+                    else
+                    {
+                        momentumVelocity = 0.0;
+                    }
+                    
+                    // Start momentum if velocity is significant
+                    if (Math.Abs(momentumVelocity) > MIN_VELOCITY)
+                    {
+                        StartMomentum();
+                    }
+                    else
+                    {
+                        // Snap to nearest tick if no momentum
+                        SnapToNearestTick();
+                        Renderer.RedrawTimeline(currentOffset);
+                    }
+                    
+                    // Clear velocity history
+                    velocityHistory.Clear();
                 }
                 else
                 {
-                    momentumVelocity = 0.0;
-                }
-                
-                // Start momentum if velocity is significant
-                if (Math.Abs(momentumVelocity) > MIN_VELOCITY)
-                {
-                    StartMomentum();
-                }
-                else
-                {
-                    // Snap to nearest tick if no momentum
+                    // If momentum is disabled, just snap to nearest tick
                     SnapToNearestTick();
-                    RedrawTimeline();
+                    Renderer.RedrawTimeline(currentOffset);
+                    velocityHistory.Clear();
                 }
-                
-                // Clear velocity history
-                velocityHistory.Clear();
             }
         }
         
@@ -594,39 +464,51 @@ namespace timeline_test
                 isDragging = false;
                 TimelineCanvas.ReleaseMouseCapture();
                 
-                // Calculate average velocity from recent samples (within MAX_VELOCITY_AGE)
-                DateTime now = DateTime.Now;
-                var recentVelocities = velocityHistory
-                    .Where(v => (now - v.time).TotalSeconds <= MAX_VELOCITY_AGE)
-                    .Select(v => v.velocity)
-                    .ToList();
-                
-                if (recentVelocities.Count > 0)
+                if (useDragMomentum)
                 {
-                    // Use average of recent velocities
-                    momentumVelocity = recentVelocities.Average();
+                    // Calculate average velocity from recent samples (within MAX_VELOCITY_AGE)
+                    DateTime now = DateTime.Now;
+                    var recentVelocities = velocityHistory
+                        .Where(v => (now - v.time).TotalSeconds <= MAX_VELOCITY_AGE)
+                        .Select(v => v.velocity)
+                        .ToList();
+                    
+                    if (recentVelocities.Count > 0)
+                    {
+                        // Use average of recent velocities
+                        momentumVelocity = recentVelocities.Average();
+                    }
+                    else
+                    {
+                        momentumVelocity = 0.0;
+                    }
+                    
+                    // Start momentum if velocity is significant
+                    if (Math.Abs(momentumVelocity) > MIN_VELOCITY)
+                    {
+                        StartMomentum();
+                    }
+                    else
+                    {
+                        // Snap to nearest tick if no momentum
+                        SnapToNearestTick();
+                        Renderer.RedrawTimeline(currentOffset);
+                    }
+                    
+                    // Clear velocity history
+                    velocityHistory.Clear();
                 }
                 else
                 {
-                    momentumVelocity = 0.0;
-                }
-                
-                // Start momentum if velocity is significant
-                if (Math.Abs(momentumVelocity) > MIN_VELOCITY)
-                {
-                    StartMomentum();
-                }
-                else
-                {
-                    // Snap to nearest tick if no momentum
+                    // If momentum is disabled, just snap to nearest tick
                     SnapToNearestTick();
-                    RedrawTimeline();
+                    Renderer.RedrawTimeline(currentOffset);
+                    velocityHistory.Clear();
                 }
-                
-                // Clear velocity history
-                velocityHistory.Clear();
             }
         }
+
+        #region Momentum
 
         /// <summary>
         /// Starts momentum scrolling based on the drag velocity
@@ -666,7 +548,7 @@ namespace timeline_test
                 // Velocity is too low, stop momentum and snap to nearest tick
                 StopMomentum();
                 SnapToNearestTick();
-                RedrawTimeline();
+                Renderer.RedrawTimeline(currentOffset);
                 return;
             }
             
@@ -678,9 +560,13 @@ namespace timeline_test
             
             // Apply friction
             momentumVelocity *= FRICTION;
-            
-            RedrawTimeline();
+
+            Renderer.RedrawTimeline(currentOffset);
         }
+
+        #endregion
+
+        #region Resizing
 
         /// <summary>
         /// Handles Timeline splitter drag - resizes TOP (three columns) and MIDDLE (Timeline),
@@ -774,6 +660,7 @@ namespace timeline_test
             UpdateRowProportions();
         }
 
+
         /// <summary>
         /// Updates stored proportions of the three resizable rows for maintaining proportions on window resize
         /// </summary>
@@ -790,6 +677,35 @@ namespace timeline_test
             }
         }
 
+        #endregion
+
+        /// <summary>
+        /// Handles hamburger menu button click - opens the menu popup
+        /// </summary>
+        private void HamburgerMenuButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (HamburgerMenuPopup != null)
+            {
+                HamburgerMenuPopup.IsOpen = !HamburgerMenuPopup.IsOpen;
+            }
+        }
+
+        public void JumpToYear(int year)
+        {
+
+        }
+
+        private void TimelineCanvas_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Delta > 0)
+            {
+                
+            }
+            else
+            {
+
+            }
+        }
     }
 }
 

@@ -45,6 +45,8 @@ namespace timeline_test.classes
 
         public int CreationGranularity { get; set; }
 
+        public int ItemIndex { get; set; }
+
         public Event()
         {
             ItemType = ItemTypes.Event;
