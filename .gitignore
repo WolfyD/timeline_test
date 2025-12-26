@@ -6,6 +6,6 @@ bin/
 obj/
 
 # ignore nested project bin folders
-timeline_test/bin/
-timeline_test/obj/
+timeline/bin/
+timeline/obj/
 packages/

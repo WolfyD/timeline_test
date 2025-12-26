@@ -1,5 +1,5 @@
 ﻿using NUnit.Framework;
-using timeline_test.classes;
+using timeline.classes;
 
 namespace StoryTimeline.Tests
 {

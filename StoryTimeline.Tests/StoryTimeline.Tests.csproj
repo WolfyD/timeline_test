@@ -131,7 +131,7 @@
     <Compile Include="SampleTest.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\timeline_test\StoryTimeline.csproj">
+    <ProjectReference Include="..\timeline\StoryTimeline.csproj">
       <Project>{ad736b72-79bf-44b8-b755-767eec7b71fe}</Project>
       <Name>StoryTimeline</Name>
     </ProjectReference>
